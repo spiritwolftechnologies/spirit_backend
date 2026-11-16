@@ -1,0 +1,319 @@
+{
+  "info": {
+    "_postman_id": "5620fdf8-2460-4b1f-ad56-19fa0f465540",
+    "name": "Spiritwolf API",
+    "description": "Backend API requests. Register and verify the emailed code before password login. Password login does not create accounts. Use the saved Bearer token or session cookie for protected requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000"
+    },
+    {
+      "key": "testEmail",
+      "value": "taylor@example.com"
+    },
+    {
+      "key": "testPassword",
+      "value": "ChangeMe123!"
+    },
+    {
+      "key": "testName",
+      "value": "Taylor Example"
+    },
+    {
+      "key": "verificationCode",
+      "value": "000000"
+    },
+    {
+      "key": "authToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "description": "No body. Expected: 200 {\"status\":\"ok\"}."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{testName}}\",\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/auth/register",
+            "description": "Starts registration and emails a 6-digit code; it does not create an account/session yet. Expected: 202 with a message and email. Configure SMTP on the backend, and change testEmail if already registered."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const payload = pm.response.json();",
+                  "  if (payload.token) pm.collectionVariables.set('authToken', payload.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"code\": \"{{verificationCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/auth/verify-email",
+            "description": "Read the code from the email, update verificationCode, and send within 5 minutes. Successful response is 201 with user and token; the collection saves the token for subsequent calls."
+          },
+          "response": []
+        },
+        {
+          "name": "Resend verification code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/auth/verification/resend",
+            "description": "Resends a code for a pending registration. Wait at least one minute between requests."
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const payload = pm.response.json();",
+                  "  if (payload.token) pm.collectionVariables.set('authToken', payload.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "Only works after Register and Verify email have successfully created the account. Login never creates an account. Expected: 200 with a user, token, and session cookie; the collection saves the token. Unregistered or unverified users receive 401."
+          },
+          "response": []
+        },
+        {
+          "name": "Current user",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/me",
+            "description": "Requires the Bearer token saved after email verification or login. Expected: 200 {\"user\":{\"id\":\"...\",\"name\":\"...\",\"email\":\"...\"}}."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) pm.collectionVariables.unset('authToken');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/logout",
+            "description": "No body. Clears the session cookie. Expected: 200 {\"message\":\"Logged out.\"}."
+          },
+          "response": []
+        },
+        {
+          "name": "Google OAuth start",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/google",
+            "description": "Browser-based OAuth flow; configure Google credentials and start this endpoint in a browser. It redirects to Google. The Google callback is handled at /api/auth/google/callback."
+          },
+          "response": []
+        },
+        {
+          "name": "Google OAuth callback (manual/browser flow only)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/auth/google/callback?code={{googleCode}}&state={{googleState}}",
+            "description": "Google supplies these query parameters and the matching state cookie during the browser sign-in flow. Do not send placeholder values; this request is listed for endpoint reference only."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Analysis",
+      "item": [
+        {
+          "name": "Create analysis",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"Should we launch the new subscription plan?\",\n  \"details\": \"We are considering a three-month pilot before a full launch.\",\n  \"context\": \"Current retention is 84%; the plan is still being validated.\",\n  \"externalResearch\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/analysis",
+            "description": "Requires a session and a configured backend AI_API_KEY. Expected: 201 {\"analysis\":{\"id\":\"...\",\"decision\":\"...\",\"report\":{\"executiveSummary\":\"...\",\"recommendation\":\"...\",\"confidence\":\"low|medium|high\",\"keyConsiderations\":[\"...\"],\"nextSteps\":[\"...\"],\"assumptions\":[\"...\"],\"risks\":[\"...\"]},\"createdAt\":\"...\"}}."
+          },
+          "response": []
+        },
+        {
+          "name": "Analysis history",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/analysis/history",
+            "description": "Requires a session. No body. Expected: 200 {\"analyses\":[...]} with up to 50 latest reports."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Files",
+      "item": [
+        {
+          "name": "Read uploaded file",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/files/read",
+            "description": "Requires a session. Select a local .txt, .csv, .md, .pdf, or .xlsx file for the file form field. Do not set Content-Type manually; Postman adds the multipart boundary. Expected: 200 {\"fileName\":\"notes.txt\",\"text\":\"...\",\"characters\":123}."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
