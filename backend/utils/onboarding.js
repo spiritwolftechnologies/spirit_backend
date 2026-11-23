@@ -113,4 +113,17 @@ function validateStep(step, value) {
   }
 }
 
-module.exports = { validateStep };
+function validateOnboarding(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new AppError(400, "The onboarding field must be a JSON object containing all onboarding answers.");
+  }
+
+  return {
+    step1: validateStep(1, value),
+    step2: validateStep(2, value),
+    step3: validateStep(3, value),
+    step4: validateStep(4, value),
+  };
+}
+
+module.exports = { validateOnboarding, validateStep };

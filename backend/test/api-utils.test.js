@@ -9,7 +9,7 @@ const { readUploadedFile } = require("../services/fileReader");
 const { buildVerificationEmail } = require("../services/verificationEmailTemplate");
 const { validateReport } = require("../utils/validateReport");
 const { getSessionToken } = require("../middleware/requireUser");
-const { validateStep } = require("../utils/onboarding");
+const { validateOnboarding, validateStep } = require("../utils/onboarding");
 const {
   generateVerificationCode,
   hashVerificationCode,
@@ -116,15 +116,15 @@ test("validates onboarding steps and permits optional form fields to be blank", 
     industry: "B2B SaaS",
     stage: "Invalid",
   }), /Stage/);
+  assert.throws(() => validateOnboarding({ steps: { "1": { businessName: "Spiritwolf Labs" } } }), /Business name/);
 });
 
-test("onboarding saves four steps, gates analysis, and marks completion", async () => {
+test("onboarding validates and saves all four steps in one request before analysis", async () => {
   const originalFindSession = prisma.session.findFirst;
   const profileModel = prisma.onboardingProfile;
   const originals = {
     findUnique: profileModel.findUnique,
     upsert: profileModel.upsert,
-    update: profileModel.update,
     createAnalysis: prisma.analysis.create,
   };
   const originalFetch = global.fetch;
@@ -134,12 +134,10 @@ test("onboarding saves four steps, gates analysis, and marks completion", async 
     user: { id: "onboarding-test-user", name: "Test User", email: "test@example.com" },
   });
   profileModel.findUnique = async () => profile;
+  let upsertCalls = 0;
   profileModel.upsert = async ({ create, update }) => {
-    profile = profile ? { ...profile, ...update } : { ...create, completedAt: null };
-    return profile;
-  };
-  profileModel.update = async ({ data }) => {
-    profile = { ...profile, ...data };
+    upsertCalls += 1;
+    profile = { ...(profile || {}), ...create, ...update };
     return profile;
   };
 
@@ -163,48 +161,42 @@ test("onboarding saves four steps, gates analysis, and marks completion", async 
   try {
     let result = await send("/api/onboarding", "GET");
     assert.equal(result.response.status, 200);
-    assert.equal(result.payload.onboarding.nextStep, 1);
+    assert.equal(result.payload.onboarding, null);
+    assert.equal(result.payload.completed, false);
 
     result = await send("/api/analysis", "POST", {
       decision: "Should we launch a new product?",
     });
     assert.equal(result.response.status, 409);
 
-    result = await send("/api/onboarding/complete", "POST");
-    assert.equal(result.response.status, 409);
-    assert.match(result.payload.error, /steps 1, 2, 3, 4/);
+    const onboarding = {
+      businessName: "Spiritwolf Labs",
+      industry: "B2B SaaS",
+      stage: "Growing",
+      targetCustomerProfile: "Mid-market technology companies",
+      customerTypes: ["B2B Mid-Market"],
+      geographicMarkets: ["North America"],
+      competitors: [],
+      pricingModel: "Subscription / SaaS",
+      quarterlyGoals: ["Reduce Churn"],
+      biggestObstacle: "Resource Constraints",
+      planningHorizon: "6 Months",
+    };
+    result = await send("/api/onboarding", "POST", {
+      onboarding: { businessName: "Spiritwolf Labs" },
+    });
+    assert.equal(result.response.status, 400);
+    assert.equal(upsertCalls, 0);
 
-    const steps = [
-      {
-        businessName: "Spiritwolf Labs",
-        industry: "B2B SaaS",
-        stage: "Growing",
-      },
-      {
-        targetCustomerProfile: "Mid-market technology companies",
-        customerTypes: ["B2B Mid-Market"],
-        geographicMarkets: ["North America"],
-      },
-      { competitors: [], pricingModel: "Subscription / SaaS" },
-      {
-        quarterlyGoals: ["Reduce Churn"],
-        biggestObstacle: "Resource Constraints",
-        planningHorizon: "6 Months",
-      },
-    ];
-    for (let index = 0; index < steps.length; index += 1) {
-      result = await send(`/api/onboarding/steps/${index + 1}`, "PUT", steps[index]);
-      assert.equal(result.response.status, 200);
-    }
-
-    result = await send("/api/onboarding/complete", "POST");
+    result = await send("/api/onboarding", "POST", { onboarding });
     assert.equal(result.response.status, 200);
-    assert.equal(result.payload.onboarding.completed, true);
-    assert.equal(result.payload.onboarding.nextStep, null);
+    assert.equal(result.payload.onboarding.businessName, "Spiritwolf Labs");
+    assert.equal(result.payload.completed, true);
     assert.equal(result.payload.next, "analysis");
+    assert.equal(upsertCalls, 1);
 
     result = await send("/api/onboarding", "GET");
-    assert.equal(result.payload.onboarding.steps["1"].businessName, "Spiritwolf Labs");
+    assert.equal(result.payload.onboarding.targetCustomerProfile, "Mid-market technology companies");
 
     process.env.AI_API_KEY = "test-analysis-key";
     let aiRequest;
@@ -237,18 +229,10 @@ test("onboarding saves four steps, gates analysis, and marks completion", async 
     assert.equal(result.response.status, 201);
     assert.match(aiRequest.messages[1].content, /Spiritwolf Labs/);
     assert.match(aiRequest.messages[1].content, /Mid-market technology companies/);
-
-    result = await send("/api/onboarding/steps/1", "PUT", steps[0]);
-    assert.equal(result.payload.onboarding.completed, false);
-    result = await send("/api/analysis", "POST", {
-      decision: "Should we launch a new product?",
-    });
-    assert.equal(result.response.status, 409);
   } finally {
     prisma.session.findFirst = originalFindSession;
     profileModel.findUnique = originals.findUnique;
     profileModel.upsert = originals.upsert;
-    profileModel.update = originals.update;
     prisma.analysis.create = originals.createAnalysis;
     global.fetch = originalFetch;
     if (originalAiApiKey === undefined) delete process.env.AI_API_KEY;

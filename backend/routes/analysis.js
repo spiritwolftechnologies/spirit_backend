@@ -41,10 +41,10 @@ router.post("/", async (request, response, next) => {
     }
 
     const businessContext = JSON.stringify({
-      business: onboarding.step1,
-      idealCustomerProfile: onboarding.step2,
-      competitorsAndPricing: onboarding.step3,
-      goalsAndChallenges: onboarding.step4,
+      ...onboarding.step1,
+      ...onboarding.step2,
+      ...onboarding.step3,
+      ...onboarding.step4,
     }, null, 2);
     const report = await requestAnalysis({
       decision: decision.trim(),
