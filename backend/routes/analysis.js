@@ -26,10 +26,33 @@ router.post("/", async (request, response, next) => {
       throw new AppError(400, "externalResearch must be a boolean.");
     }
 
+    const onboarding = await prisma.onboardingProfile.findUnique({
+      where: { userId: request.user.id },
+      select: {
+        step1: true,
+        step2: true,
+        step3: true,
+        step4: true,
+        completedAt: true,
+      },
+    });
+    if (!onboarding?.completedAt) {
+      throw new AppError(409, "Complete all four onboarding steps before starting an analysis.");
+    }
+
+    const businessContext = JSON.stringify({
+      business: onboarding.step1,
+      idealCustomerProfile: onboarding.step2,
+      competitorsAndPricing: onboarding.step3,
+      goalsAndChallenges: onboarding.step4,
+    }, null, 2);
     const report = await requestAnalysis({
       decision: decision.trim(),
       details: details.trim(),
-      context,
+      context: [
+        context.trim(),
+        `Completed business onboarding profile:\n${businessContext}`,
+      ].filter(Boolean).join("\n\n"),
       externalResearch,
     });
     const analysis = {

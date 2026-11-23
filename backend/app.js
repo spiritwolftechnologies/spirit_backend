@@ -6,6 +6,7 @@ const express = require("express");
 const { initializeDatabase } = require("./db/init");
 const authRoutes = require("./routes/auth");
 const analysisRoutes = require("./routes/analysis");
+const onboardingRoutes = require("./routes/onboarding");
 const fileRoutes = require("./routes/files");
 const { AppError } = require("./utils/appError");
 
@@ -31,6 +32,7 @@ app.use(cookieParser());
 
 app.get("/health", (_request, response) => response.json({ status: "ok" }));
 app.use("/api/auth", authRoutes);
+app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/analysis", analysisRoutes);
 app.use("/api/files", fileRoutes);
 

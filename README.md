@@ -178,6 +178,112 @@ Start Google OAuth. No request body. With Google OAuth configured, redirects to 
 
 Google OAuth callback, normally called by Google with `code` and `state` query parameters after the `/google` flow. No JSON body. On success, sets the session cookie and redirects to the frontend. Errors redirect to the frontend login page with an `authError` query parameter.
 
+### `GET /api/onboarding`
+
+Return the signed-in user's saved four-step business profile and whether onboarding is complete. Requires a session.
+
+**200 response**
+
+```json
+{
+  "onboarding": {
+    "steps": {
+      "1": {
+        "businessName": "Spiritwolf Labs",
+        "industry": "B2B Cloud Infrastructure & SaaS",
+        "stage": "Growing",
+        "description": "Workflow automation for software teams."
+      },
+      "2": null,
+      "3": null,
+      "4": null
+    },
+    "completed": false,
+    "completedAt": null,
+    "nextStep": 2
+  }
+}
+```
+
+### `PUT /api/onboarding/steps/{1|2|3|4}`
+
+Save or replace an individual step. Each step is persisted separately, so a user can leave and resume onboarding. All endpoints require a session. Save each step before moving on; after editing a step on a completed profile, call the completion endpoint again.
+
+**Step 1 request**
+
+```json
+{
+  "businessName": "Spiritwolf Labs",
+  "industry": "B2B Cloud Infrastructure & SaaS",
+  "stage": "Growing",
+  "description": "Workflow automation for software teams."
+}
+```
+
+`businessName` (1–120 chars), `industry` (1–100 chars), and `stage` (`Idea`, `Early`, `Growing`, or `Established`) are required. `description` is optional (up to 1,000 chars).
+
+**Step 2 request**
+
+```json
+{
+  "targetCustomerProfile": "Mid-market CISOs and Security Directors",
+  "customerTypes": ["B2B Mid-Market"],
+  "geographicMarkets": ["North America"],
+  "averageDealSize": "$45,000",
+  "salesMotion": "Sales-Assisted"
+}
+```
+
+`targetCustomerProfile` (1–250 chars), one or more `customerTypes` (`B2B Enterprise`, `B2B Mid-Market`, `B2C / Consumer`, `B2B2C`), and one or more `geographicMarkets` (`North America`, `Europe / UK`, `APAC`, `Global`) are required. `averageDealSize` (up to 50 chars) and `salesMotion` (`Product-Led (PLG)`, `Sales-Assisted`, `Channel / Partner`) are optional.
+
+**Step 3 request**
+
+```json
+{
+  "competitors": ["Vanta", "Drata"],
+  "pricingModel": "Subscription / SaaS",
+  "competitiveMoats": ["Proprietary IP", "Switching Cost"],
+  "pricingFriction": "Enterprise prospects request custom terms."
+}
+```
+
+`competitors` is an array of up to 20 names (each 1–100 chars; it may be empty). `pricingModel` is required and must be `Subscription / SaaS`, `Usage-based`, `Per-Seat`, or `Fixed Tier`. `competitiveMoats` is optional and may contain `Proprietary IP`, `Switching Cost`, `Data Network Effects`, or `Speed to Deployment`. `pricingFriction` is optional (up to 250 chars).
+
+**Step 4 request**
+
+```json
+{
+  "quarterlyGoals": ["Increase Conversion / Win Rate", "Reduce Churn"],
+  "biggestObstacle": "Unclear ICP Definition",
+  "businessInquiry": "Where should we focus next?",
+  "planningHorizon": "12+ Months"
+}
+```
+
+Select one or more `quarterlyGoals` from `Increase Conversion / Win Rate`, `Scale Enterprise Outbound`, `Reduce Churn`, and `Refine Pricing Tier`. `biggestObstacle` is required (`Unclear ICP Definition`, `Resource Constraints`, `Long Sales Cycles`, or `Product Differentiation`). `businessInquiry` is optional (up to 500 chars), and `planningHorizon` must be `1-3 Months`, `6 Months`, or `12+ Months`.
+
+Each successful save returns the refreshed `onboarding` status. Invalid or missing required values return `400`.
+
+### `POST /api/onboarding/complete`
+
+Mark onboarding complete after all four steps have been saved. Requires a session. Missing steps return `409` and list the steps that still need to be completed.
+
+**200 response**
+
+```json
+{
+  "onboarding": {
+    "steps": { "1": {}, "2": {}, "3": {}, "4": {} },
+    "completed": true,
+    "completedAt": "2026-01-01T12:00:00.000Z",
+    "nextStep": null
+  },
+  "next": "analysis"
+}
+```
+
+The frontend can move the user to the decision-analysis screen after this response. `POST /api/analysis` returns `409` until onboarding is complete; completed business profile data is automatically included as analysis context.
+
 ### `POST /api/analysis`
 
 Generate and save a decision report. Requires a session and a configured `AI_API_KEY`. `decision` is required (8–500 characters); other fields are optional. `details` is limited to 2,000 characters, `context` to 50,000 characters, and `externalResearch` must be a boolean.

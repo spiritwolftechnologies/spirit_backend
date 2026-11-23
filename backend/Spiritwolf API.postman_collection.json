@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "5620fdf8-2460-4b1f-ad56-19fa0f465540",
     "name": "Spiritwolf API",
-    "description": "Backend API requests. Register and verify the emailed code before password login. Password login does not create accounts. Use the saved Bearer token or session cookie for protected requests.",
+    "description": "Backend API requests. Register and verify the emailed code before password login. After login, complete all four Onboarding requests and Complete onboarding before using Create analysis. Password login does not create accounts. Use the saved Bearer token or session cookie for protected requests.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -238,6 +238,154 @@
       ]
     },
     {
+      "name": "Onboarding",
+      "description": "Requires a session. Save all four steps, then call Complete onboarding before Create analysis. Saved steps can be fetched to resume the form.",
+      "item": [
+        {
+          "name": "Get onboarding status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/onboarding",
+            "description": "Requires a session. Returns saved steps, completion status, and nextStep (1-4 or null). Expected: 200 {\"onboarding\":{\"steps\":{\"1\":null,\"2\":null,\"3\":null,\"4\":null},\"completed\":false,\"completedAt\":null,\"nextStep\":1}}."
+          },
+          "response": []
+        },
+        {
+          "name": "Save step 1 - Business",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"businessName\": \"Spiritwolf Labs\",\n  \"industry\": \"B2B Cloud Infrastructure & SaaS\",\n  \"stage\": \"Growing\",\n  \"description\": \"We build telemetry pipelines and workflow automation for software teams.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/onboarding/steps/1",
+            "description": "Saves business name, industry, company stage, and optional short description. Stage: Idea, Early, Growing, or Established."
+          },
+          "response": []
+        },
+        {
+          "name": "Save step 2 - Ideal customer profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetCustomerProfile\": \"Mid-market CISOs & Security Directors\",\n  \"customerTypes\": [\"B2B Mid-Market\"],\n  \"geographicMarkets\": [\"North America\"],\n  \"averageDealSize\": \"$45,000\",\n  \"salesMotion\": \"Sales-Assisted\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/onboarding/steps/2",
+            "description": "Customer types: B2B Enterprise, B2B Mid-Market, B2C / Consumer, B2B2C. Geographic markets: North America, Europe / UK, APAC, Global. Sales motion (optional): Product-Led (PLG), Sales-Assisted, Channel / Partner."
+          },
+          "response": []
+        },
+        {
+          "name": "Save step 3 - Competitors and pricing",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"competitors\": [\"Vanta\", \"Drata\"],\n  \"pricingModel\": \"Subscription / SaaS\",\n  \"competitiveMoats\": [\"Proprietary IP\", \"Switching Cost\"],\n  \"pricingFriction\": \"Enterprise prospects request customized security riders before signing.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/onboarding/steps/3",
+            "description": "Competitors may be an empty array. Pricing model: Subscription / SaaS, Usage-based, Per-Seat, Fixed Tier. Competitive moat (optional): Proprietary IP, Switching Cost, Data Network Effects, Speed to Deployment. Pricing friction is optional and limited to 250 characters."
+          },
+          "response": []
+        },
+        {
+          "name": "Save step 4 - Goals and challenges",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quarterlyGoals\": [\"Increase Conversion / Win Rate\", \"Reduce Churn\"],\n  \"biggestObstacle\": \"Unclear ICP Definition\",\n  \"businessInquiry\": \"Where should we focus next: enterprise outbound or product-led growth?\",\n  \"planningHorizon\": \"12+ Months\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/onboarding/steps/4",
+            "description": "Choose one or more quarterly goals. Biggest obstacle: Unclear ICP Definition, Resource Constraints, Long Sales Cycles, or Product Differentiation. Planning horizon: 1-3 Months, 6 Months, or 12+ Months."
+          },
+          "response": []
+        },
+        {
+          "name": "Complete onboarding",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/onboarding/complete",
+            "description": "Call after all four steps have been saved. Expected: 200 with onboarding.completed=true and next=\"analysis\". Missing steps return 409."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Analysis",
       "item": [
         {
@@ -264,7 +412,7 @@
               }
             },
             "url": "{{baseUrl}}/api/analysis",
-            "description": "Requires a session and a configured backend AI_API_KEY. Expected: 201 {\"analysis\":{\"id\":\"...\",\"decision\":\"...\",\"report\":{\"executiveSummary\":\"...\",\"recommendation\":\"...\",\"confidence\":\"low|medium|high\",\"keyConsiderations\":[\"...\"],\"nextSteps\":[\"...\"],\"assumptions\":[\"...\"],\"risks\":[\"...\"]},\"createdAt\":\"...\"}}."
+            "description": "Requires a session, completed onboarding, and a configured backend AI_API_KEY. The saved onboarding profile is automatically included in the analysis context. If onboarding is incomplete, returns 409. Expected: 201 {\"analysis\":{\"id\":\"...\",\"decision\":\"...\",\"report\":{\"executiveSummary\":\"...\",\"recommendation\":\"...\",\"confidence\":\"low|medium|high\",\"keyConsiderations\":[\"...\"],\"nextSteps\":[\"...\"],\"assumptions\":[\"...\"],\"risks\":[\"...\"]},\"createdAt\":\"...\"}}."
           },
           "response": []
         },

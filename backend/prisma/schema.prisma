@@ -17,6 +17,7 @@ model User {
   sessions     Session[]
   analyses     Analysis[]
   oauthAccounts OAuthAccount[]
+  onboarding   OnboardingProfile?
 
   @@map("users")
 }
@@ -67,4 +68,18 @@ model Analysis {
 
   @@index([userId, createdAt(sort: Desc)], map: "analyses_user_created_idx")
   @@map("analyses")
+}
+
+model OnboardingProfile {
+  userId      String    @id @map("user_id") @db.Text
+  step1       Json?     @db.JsonB
+  step2       Json?     @db.JsonB
+  step3       Json?     @db.JsonB
+  step4       Json?     @db.JsonB
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("onboarding_profiles")
 }
