@@ -11,22 +11,14 @@ const fileRoutes = require("./routes/files");
 const { AppError } = require("./utils/appError");
 
 const app = express();
-const allowedOrigins = (process.env.FRONTEND_ORIGIN || "http://localhost:3000")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
 
 app.disable("x-powered-by");
-app.use(cors());
-// app.use(
-//   cors({
-//     credentials: true,
-//     origin(origin, callback) {
-//       if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-//       return callback(new AppError(403, "This origin is not allowed."));
-//     },
-//   }),
-// );
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 

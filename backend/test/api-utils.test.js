@@ -86,6 +86,28 @@ test("accepts Bearer session tokens and retains cookie session support", () => {
   assert.equal(getSessionToken(cookieRequest), "cookie-token");
 });
 
+test("allows cross-origin preflight requests from any origin", async () => {
+  const server = app.listen(0);
+  await once(server, "listening");
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/auth/forgot-password`, {
+      method: "OPTIONS",
+      headers: {
+        Origin: "http://localhost:5173",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "content-type",
+      },
+    });
+
+    assert.equal(response.status, 204);
+    assert.equal(response.headers.get("access-control-allow-origin"), "http://localhost:5173");
+    assert.equal(response.headers.get("access-control-allow-credentials"), "true");
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
+
 test("validates onboarding steps and permits optional form fields to be blank", () => {
   assert.deepEqual(validateStep(1, {
     businessName: "  Spiritwolf Labs ",
@@ -124,20 +146,38 @@ test("onboarding validates and saves all four steps in one request before analys
   const profileModel = prisma.onboardingProfile;
   const originals = {
     findUnique: profileModel.findUnique,
-    upsert: profileModel.upsert,
+    create: profileModel.create,
+    update: profileModel.update,
     createAnalysis: prisma.analysis.create,
   };
   const originalFetch = global.fetch;
   const originalAiApiKey = process.env.AI_API_KEY;
   let profile = null;
-  prisma.session.findFirst = async () => ({
-    user: { id: "onboarding-test-user", name: "Test User", email: "test@example.com" },
-  });
+  let authenticated = true;
+  prisma.session.findFirst = async () => authenticated
+    ? { user: { id: "onboarding-test-user", name: "Test User", email: "test@example.com" } }
+    : null;
   profileModel.findUnique = async () => profile;
-  let upsertCalls = 0;
-  profileModel.upsert = async ({ create, update }) => {
-    upsertCalls += 1;
-    profile = { ...(profile || {}), ...create, ...update };
+  let createCalls = 0;
+  let updateCalls = 0;
+  profileModel.create = async ({ data }) => {
+    createCalls += 1;
+    if (profile) {
+      const error = new Error("Unique constraint failed.");
+      error.code = "P2002";
+      throw error;
+    }
+    profile = { ...data };
+    return profile;
+  };
+  profileModel.update = async ({ where, data }) => {
+    updateCalls += 1;
+    if (!profile || profile.userId !== where.userId) {
+      const error = new Error("Record not found.");
+      error.code = "P2025";
+      throw error;
+    }
+    profile = { ...profile, ...data };
     return profile;
   };
 
@@ -164,6 +204,11 @@ test("onboarding validates and saves all four steps in one request before analys
     assert.equal(result.payload.onboarding, null);
     assert.equal(result.payload.completed, false);
 
+    authenticated = false;
+    result = await send("/api/onboarding", "POST", { onboarding: {} });
+    assert.equal(result.response.status, 401);
+    authenticated = true;
+
     result = await send("/api/analysis", "POST", {
       decision: "Should we launch a new product?",
     });
@@ -186,14 +231,28 @@ test("onboarding validates and saves all four steps in one request before analys
       onboarding: { businessName: "Spiritwolf Labs" },
     });
     assert.equal(result.response.status, 400);
-    assert.equal(upsertCalls, 0);
+    assert.equal(createCalls, 0);
+
+    result = await send("/api/onboarding", "PUT", { onboarding });
+    assert.equal(result.response.status, 404);
+    assert.equal(updateCalls, 1);
 
     result = await send("/api/onboarding", "POST", { onboarding });
     assert.equal(result.response.status, 200);
     assert.equal(result.payload.onboarding.businessName, "Spiritwolf Labs");
     assert.equal(result.payload.completed, true);
     assert.equal(result.payload.next, "analysis");
-    assert.equal(upsertCalls, 1);
+    assert.equal(createCalls, 1);
+
+    result = await send("/api/onboarding", "POST", { onboarding });
+    assert.equal(result.response.status, 409);
+
+    const updatedOnboarding = { ...onboarding, industry: "B2B Cybersecurity SaaS" };
+    result = await send("/api/onboarding", "PUT", { onboarding: updatedOnboarding });
+    assert.equal(result.response.status, 200);
+    assert.equal(result.payload.onboarding.industry, "B2B Cybersecurity SaaS");
+    assert.equal(result.payload.completed, true);
+    assert.equal(updateCalls, 2);
 
     result = await send("/api/onboarding", "GET");
     assert.equal(result.payload.onboarding.targetCustomerProfile, "Mid-market technology companies");
@@ -232,7 +291,8 @@ test("onboarding validates and saves all four steps in one request before analys
   } finally {
     prisma.session.findFirst = originalFindSession;
     profileModel.findUnique = originals.findUnique;
-    profileModel.upsert = originals.upsert;
+    profileModel.create = originals.create;
+    profileModel.update = originals.update;
     prisma.analysis.create = originals.createAnalysis;
     global.fetch = originalFetch;
     if (originalAiApiKey === undefined) delete process.env.AI_API_KEY;

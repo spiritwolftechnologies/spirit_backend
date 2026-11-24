@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "5620fdf8-2460-4b1f-ad56-19fa0f465540",
     "name": "Spiritwolf API",
-    "description": "Backend API requests. Register and verify the emailed code before password login. After login, the frontend collects the four onboarding steps and submits them together once before using Create analysis. Password login does not create accounts. Use the saved Bearer token or session cookie for protected requests.",
+    "description": "Backend API requests. Register and verify the emailed code before password login. Onboarding GET, create, and edit requests require the signed-in user's session. The frontend collects all onboarding fields and submits them together once. Password login does not create accounts. Use the saved Bearer token or session cookie for protected requests.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -239,7 +239,7 @@
     },
     {
       "name": "Onboarding",
-      "description": "Requires a session. The frontend collects all answers across its four UI steps and sends one Submit onboarding request at the end; it does not call the backend between steps.",
+      "description": "All requests require login and are scoped to the signed-in user. The frontend collects answers across its four UI steps and sends one full onboarding object at the end; use Edit onboarding to replace an existing profile.",
       "item": [
         {
           "name": "Get onboarding status",
@@ -280,7 +280,35 @@
               }
             },
             "url": "{{baseUrl}}/api/onboarding",
-            "description": "Send this request once after the user completes all four frontend UI screens. The body uses one flat onboarding object with all answers, not numbered steps. Validation failure returns 400 and saves nothing. Success returns the flat onboarding profile, completed=true, and next=\"analysis\"."
+            "description": "Create a profile once after the user completes all four frontend UI screens. The body uses one flat onboarding object with all answers, not numbered steps. Validation failure returns 400 and saves nothing. If a profile already exists, returns 409; use Edit onboarding. Success returns the flat onboarding profile, completed=true, and next=\"analysis\"."
+          },
+          "response": []
+        },
+        {
+          "name": "Edit onboarding",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"onboarding\": {\n    \"businessName\": \"Spiritwolf Labs\",\n    \"industry\": \"B2B Cybersecurity SaaS\",\n    \"stage\": \"Growing\",\n    \"description\": \"We build telemetry pipelines and workflow automation for software teams.\",\n    \"targetCustomerProfile\": \"Mid-market CISOs & Security Directors\",\n    \"customerTypes\": [\"B2B Mid-Market\"],\n    \"geographicMarkets\": [\"North America\"],\n    \"averageDealSize\": \"$45,000\",\n    \"salesMotion\": \"Sales-Assisted\",\n    \"competitors\": [\"Vanta\", \"Drata\"],\n    \"pricingModel\": \"Subscription / SaaS\",\n    \"competitiveMoats\": [\"Proprietary IP\", \"Switching Cost\"],\n    \"pricingFriction\": \"Enterprise prospects request customized security riders before signing.\",\n    \"quarterlyGoals\": [\"Increase Conversion / Win Rate\", \"Reduce Churn\"],\n    \"biggestObstacle\": \"Unclear ICP Definition\",\n    \"businessInquiry\": \"Where should we focus next: enterprise outbound or product-led growth?\",\n    \"planningHorizon\": \"12+ Months\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{baseUrl}}/api/onboarding",
+            "description": "Replace all onboarding fields for the signed-in user. Send the full flat object (same shape as Submit onboarding), not a partial step update. Returns 404 if the user has not created a profile yet."
           },
           "response": []
         }
